@@ -88,7 +88,7 @@ add distance=2 gateway=$GWISP2 routing-mark=to_ISP1
 
 # special route rule example
 /ip firewall address-list
-add list=speedtest address=s.speedtest.net
+add list=speedtest address=speedtest.net
 add list=speedtest address=c.speedtestcustom.com
 
 /ip firewall mangle
