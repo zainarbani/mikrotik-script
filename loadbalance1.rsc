@@ -25,36 +25,38 @@ add action=masquerade chain=srcnat out-interface=$ETHISP1
 add action=masquerade chain=srcnat out-interface=$ETHISP2
 
 /ip firewall mangle
-add action=mark-connection chain=prerouting comment=LB connection-mark=\
+add action=accept chain=prerouting comment=accept-local \
+    dst-address-list=local
+add action=mark-connection chain=prerouting comment=LB-conn connection-mark=\
     no-mark in-interface=$ETHISP1 new-connection-mark=ISP1_conn \
     passthrough=no
 add action=mark-connection chain=prerouting connection-mark=no-mark \
     in-interface=$ETHISP2 new-connection-mark=ISP2_conn passthrough=no
-add action=mark-connection chain=prerouting connection-mark=no-mark \
-    dst-address-list=!local dst-address-type=!local dst-port=80,8080,3128,443 \
+add action=mark-connection chain=prerouting comment=LB-pcc connection-mark=no-mark \
+    dst-address-list=!local dst-address-type=!local dst-port=80,8080,443 \
     in-interface=$ETHCLIENT new-connection-mark=ISP1_conn passthrough=yes \
     per-connection-classifier=both-addresses-and-ports:3/0 protocol=tcp
 add action=mark-connection chain=prerouting connection-mark=no-mark \
-    dst-address-list=!local dst-address-type=!local dst-port=80,8080,3128,443 \
+    dst-address-list=!local dst-address-type=!local dst-port=80,8080,443 \
     in-interface=$ETHCLIENT new-connection-mark=ISP1_conn passthrough=yes \
     per-connection-classifier=both-addresses-and-ports:3/1 protocol=tcp
 add action=mark-connection chain=prerouting connection-mark=no-mark \
-    dst-address-list=!local dst-address-type=!local dst-port=80,8080,3128,443 \
+    dst-address-list=!local dst-address-type=!local dst-port=80,8080,443 \
     in-interface=$ETHCLIENT new-connection-mark=ISP2_conn passthrough=yes \
     per-connection-classifier=both-addresses-and-ports:3/2 protocol=tcp
 add action=mark-connection chain=prerouting connection-mark=no-mark \
-    dst-address-list=!local dst-address-type=!local dst-port=80,8080,3128,443 \
+    dst-address-list=!local dst-address-type=!local dst-port=80,8080,443 \
     in-interface=$ETHCLIENT new-connection-mark=ISP1_conn passthrough=yes \
     per-connection-classifier=both-addresses-and-ports:3/0 protocol=udp
 add action=mark-connection chain=prerouting connection-mark=no-mark \
-    dst-address-list=!local dst-address-type=!local dst-port=80,8080,3128,443 \
+    dst-address-list=!local dst-address-type=!local dst-port=80,8080,443 \
     in-interface=$ETHCLIENT new-connection-mark=ISP1_conn passthrough=yes \
     per-connection-classifier=both-addresses-and-ports:3/1 protocol=udp
 add action=mark-connection chain=prerouting connection-mark=no-mark \
-    dst-address-list=!local dst-address-type=!local dst-port=80,8080,3128,443 \
+    dst-address-list=!local dst-address-type=!local dst-port=80,8080,443 \
     in-interface=$ETHCLIENT new-connection-mark=ISP2_conn passthrough=yes \
     per-connection-classifier=both-addresses-and-ports:3/2 protocol=udp
-add action=mark-connection chain=prerouting connection-mark=no-mark \
+add action=mark-connection chain=prerouting comment=LB-nth connection-mark=no-mark \
     dst-address-list=!local dst-address-type=!local in-interface=$ETHCLIENT \
     new-connection-mark=ISP1_conn nth=3,1 passthrough=yes
 add action=mark-connection chain=prerouting connection-mark=no-mark \
@@ -63,7 +65,7 @@ add action=mark-connection chain=prerouting connection-mark=no-mark \
 add action=mark-connection chain=prerouting connection-mark=no-mark \
     dst-address-list=!local dst-address-type=!local in-interface=$ETHCLIENT \
     new-connection-mark=ISP2_conn nth=3,3 passthrough=yes
-add action=mark-routing chain=prerouting connection-mark=ISP1_conn \
+add action=mark-routing chain=prerouting comment=LB-route connection-mark=ISP1_conn \
     in-interface=$ETHCLIENT new-routing-mark=to_ISP1 passthrough=no
 add action=mark-routing chain=prerouting connection-mark=ISP2_conn \
     in-interface=$ETHCLIENT new-routing-mark=to_ISP2 passthrough=no
@@ -73,11 +75,23 @@ add action=mark-routing chain=output connection-mark=ISP2_conn \
     new-routing-mark=to_ISP2 out-interface=$ETHISP2 passthrough=no
 
 /ip route
-add check-gateway=ping distance=1 gateway=8.8.8.8 routing-mark=to_ISP1 \
-    target-scope=30
-add distance=2 gateway=$GWISP2 routing-mark=to_ISP1
-add check-gateway=ping distance=1 gateway=9.9.9.9 routing-mark=to_ISP2 \
+add distance=1 gateway=$GWISP1
+add distance=1 dst-address=9.9.9.9/32 gateway=$GWISP1
+add check-gateway=ping distance=1 gateway=9.9.9.9 routing-mark=to_ISP1 \
     target-scope=30
 add distance=2 gateway=$GWISP1 routing-mark=to_ISP2
-add distance=1 dst-address=8.8.8.8/32 gateway=$GWISP1
-add distance=1 dst-address=9.9.9.9/32 gateway=$GWISP1
+add distance=2 gateway=$GWISP2
+add distance=1 dst-address=9.9.9.10/32 gateway=$GWISP2
+add check-gateway=ping distance=1 gateway=9.9.9.10 routing-mark=to_ISP2 \
+    target-scope=30
+add distance=2 gateway=$GWISP2 routing-mark=to_ISP1
+
+# special route rule example
+/ip firewall address-list
+add list=speedtest address=s.speedtest.net
+add list=speedtest address=c.speedtestcustom.com
+
+/ip firewall mangle
+add action=mark-connection chain=prerouting comment=speedtest-to-ISP2 \
+    dst-address-list=speedtest in-interface=ether3 new-connection-mark=ISP2_conn \
+    passthrough=yes place-before=[find where comment=LB-route]
