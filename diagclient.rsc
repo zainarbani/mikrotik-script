@@ -1,7 +1,7 @@
 # queue parent
 :local qparent "CLIENT";
 
-# skipped user, (non remotable)
+# skip user, (non remotable)
 :local skipuser "queue1,queue2,john,doe";
 
 :log warning "Starting diagnostic..."
@@ -25,7 +25,7 @@
   } else={
    :log warning ("User $usern is up, ping avg: $($avgrtt)ms max: $($maxrtt)ms");
   }
+ }
+ delay 1s;
 }
- delay 2;
-}
-:log warning "Diagnostic completed"
+:log warning "Diagnostic complete"
