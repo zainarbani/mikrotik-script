@@ -1,4 +1,4 @@
-# mar/21/2022 01:25:31 by RouterOS 6.49.4
+# apr/25/2022 19:43:23 by RouterOS 6.49.4
 #
 # PCC + NTH load balance with recursive gateway
 # https://www.daryllswer.com/multi-wan-setups-with-retail-isps-part-2-implementation-using-routeros
@@ -14,9 +14,9 @@
 :local ETHCLIENT "ether3";
 :local GWISP1 "10.10.10.1";
 :local GWISP1 "20.20.20.1";
-:local LOCALNET {"192.168.0.1"; "192.168.1.1"; "192.168.2.1"};
+:local LOCALNET "192.168.0.0/24, 192.168.1.0/24, 192.168.2.0/24, 30.30.30.0/32";
 
-:foreach i in=$LOCALNET do={
+:foreach i in=[:toarray $LOCALNET] do={
  /ip firewall address-list add address=$i list=local
 }
 
@@ -74,17 +74,18 @@ add action=mark-routing chain=output connection-mark=ISP1_conn \
 add action=mark-routing chain=output connection-mark=ISP2_conn \
     new-routing-mark=to_ISP2 out-interface=$ETHISP2 passthrough=no
 
+
 /ip route
-add distance=1 gateway=$GWISP1
+add check-gateway=ping comment=to_ISP1 distance=1 gateway=9.9.9.9,149.112.112.112 routing-mark=to_ISP1 target-scope=30
+add comment=backup_ISP2 distance=2 gateway=$GWISP2 routing-mark=to_ISP1
+add check-gateway=ping comment=to_ISP2 distance=1 gateway=8.8.4.4,45.90.28.231 routing-mark=to_ISP2 target-scope=30
+add comment=backup_ISP1 distance=2 gateway=$GWISP1 routing-mark=to_ISP2
+add comment=main_ISP1 distance=2 gateway=$GWISP1
+add comment=main_ISP2 distance=3 gateway=$GWISP2
+add distance=1 dst-address=8.8.4.4/32 gateway=$GWISP2 comment=DNS_route
 add distance=1 dst-address=9.9.9.9/32 gateway=$GWISP1
-add check-gateway=ping distance=1 gateway=9.9.9.9 routing-mark=to_ISP1 \
-    target-scope=30
-add distance=2 gateway=$GWISP1 routing-mark=to_ISP2
-add distance=2 gateway=$GWISP2
-add distance=1 dst-address=9.9.9.10/32 gateway=$GWISP2
-add check-gateway=ping distance=1 gateway=9.9.9.10 routing-mark=to_ISP2 \
-    target-scope=30
-add distance=2 gateway=$GWISP2 routing-mark=to_ISP1
+add distance=1 dst-address=45.90.28.231/32 gateway=$GWISP2
+add distance=1 dst-address=149.112.112.112/32 gateway=$GWISP1
 
 # special route rule example
 /ip firewall address-list
@@ -93,5 +94,5 @@ add list=speedtest address=c.speedtestcustom.com
 
 /ip firewall mangle
 add action=mark-connection chain=prerouting comment=speedtest-to-ISP2 \
-    dst-address-list=speedtest in-interface=ether3 new-connection-mark=ISP2_conn \
+    dst-address-list=speedtest in-interface=$ETHCLIENT new-connection-mark=ISP2_conn \
     passthrough=yes place-before=[find where comment=LB-route]
