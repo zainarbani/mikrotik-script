@@ -41,8 +41,8 @@
  :local jsChar;
  :for i from=0 to=([:len $1] - 1) do={
   :local char [:pick $1 $i];
-  :if (([:pick $1 ($i-1)]~"[a-z|A-Z| ]" != true)\
-  && ([:pick $1 ($i+1)]~"[a-z|A-Z| ]" != true)\
+  :if (([:pick $1 ($i-1)]~"[a-z|A-Z]" != true)\
+  && ([:pick $1 ($i+1)]~"[a-z|A-Z|:|/]" != true)\
   || ([:pick $1 ($i-4) $i] = true)\
   || ([:pick $1 ($i+1) ($i+5)] = true)\
   || ([:pick $1 ($i-5) $i] = false)\
