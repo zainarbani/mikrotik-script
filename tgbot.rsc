@@ -1,6 +1,6 @@
 #!rsc by RouterOS
 # RouterOS script: Telegram Bot
-# version: v0.1-2023-2-8-release
+# version: v0.2-2023-2-10-release
 # authors: zainarbani
 #
 
@@ -9,8 +9,6 @@
 
 # TG Trusted Users ID
 :global TGTrusted "1234567890|1234567890"; 
-
-:local logTopic "TGBot:";
 
 :global TGBotBusy;
 :if ($TGBotBusy) do={
@@ -42,10 +40,9 @@
 :local jsonArr do={
  :local jsChar;
  :for i from=0 to=([:len $1] - 1) do={
-  :local char [:tostr [:pick $1 $i]];
-  :if (([:pick $1 ($i-1)]~"[a-z|A-Z]" != true)\
-  && ([:pick $1 ($i+1)]~"[a-z|A-Z|/|:]" != true)\
-  && ([:pick $1 ($i-1) ($i+1)] != "\"]")\
+  :local char [:pick $1 $i];
+  :if (([:pick $1 ($i-1)]~"[a-z|A-Z| ]" != true)\
+  && ([:pick $1 ($i+1)]~"[a-z|A-Z| ]" != true)\
   || ([:pick $1 ($i-4) $i] = true)\
   || ([:pick $1 ($i+1) ($i+5)] = true)\
   || ([:pick $1 ($i-5) $i] = false)\
@@ -58,20 +55,11 @@
    }
   }
   :if ($char = "\$") do={
-   :set char "linkVar";
+   :set char "\\\$";
   }
   :set jsChar ($jsChar . $char);
  }
  :local jsArr [[:parse ":local jsRet $jsChar; :return \$jsRet"]];
- :local textMsg ($jsArr->"result"->0->"message"->"text");
- :local isVar [:find $textMsg "linkVar"];
- :while ($isVar > 0) do={
-  :local textRep ([:pick $textMsg 0 $isVar] . "\$");
-  :set textRep ($textRep . [:pick $textMsg ($isVar + 7) [:len $textMsg]]);
-  :set textMsg $textRep;
-  :set isVar [:find $textMsg "linkVar"];
- }
- :set ($jsArr->"result"->0->"message"->"text") $textMsg;
  :return $jsArr;
 }
 
@@ -101,14 +89,18 @@
  do {
   :set resDat ([/tool fetch url="$TelegramAPI$TGBotToken/$1\?$2" output=user as-value]->"data");
  } on-error={
-  :log warning "$logTopic fetch: $1 failed";
+  :log warning "TGBot: fetch: $1 failed";
  }
  :return $resDat;
 }
 
 :local getUpdate [$tgFetch "getUpdates" ("limit=1&offset=$TGLastOffset")];
 :if ([:len $getUpdate] > 23) do={
- :local tgSuccess false;
+ :local textMsg;
+ :local payLd;
+ :local sendMsg;
+ :local cmdLog;
+ :local customCmd "/start|/help|/reservedcmd";
  :local updRes [$jsonArr $getUpdate];
  :local updDat ($updRes->"result"->0);
  :local updId ($updDat->"update_id");
@@ -119,34 +111,37 @@
  :local msgType ($updDat->"message"->"entities"->0->"type");
  :local textCmd ($updDat->"message"->"text");
  :if (($msgType~"bot_command") || ([:pick $textCmd 0] = ":")) do={
-  :log warning "$logTopic Receiving command:\n$textCmd";
+  :log warning "TGBot: Receiving command:\n$textCmd";
   :if ($fromId~$TGTrusted) do={
-   :local textMsg;
-   :if ($textCmd~"/start|/help") do={
-    :set textMsg [$urlEnc ("Example:\n/interface print")];
+   :if ($textCmd~$customCmd) do={
+    :if ($textCmd~"/start") do={
+     :set textMsg [$urlEnc ("Hi, I'm Alive!")];
+    }
+    :if ($textCmd~"/help") do={
+     :set textMsg [$urlEnc ("Example:\n/interface print")];
+    }
+    :if ($textCmd~"/reservedcmd") do={
+     :set textMsg "reservedcmd";
+    }
+    :set payLd ("chat_id=$chatId&reply_to_message_id=$msgId&text=$textMsg");
+    :set sendMsg [$tgFetch "sendMessage" $payLd];
    } else={
     :local excOut [$execMsg $textCmd];
     :set textMsg [$urlEnc ("```\n$excOut\n```")];
+    :set payLd ("chat_id=$chatId&reply_to_message_id=$msgId&text=$textMsg&parse_mode=markdown");
+    :set sendMsg [$tgFetch "sendMessage" $payLd];
    }
-   :local payLd ("chat_id=$chatId&reply_to_message_id=$msgId&text=$textMsg&parse_mode=markdown");
-   :local sendMsg [$tgFetch "sendMessage" $payLd];
-   :local sendRep [$jsonArr [$sendMsg $payLd]];
-   :if ($sendRep->"ok") do={
-    :set tgSuccess true;
-    :log warning "$logTopic Trusted user @$fromUser, command executed!";
-   }
+   :set cmdLog "TGBot: Trusted user @$fromUser, command executed!";
   } else={
-   :local textMsg [$urlEnc ("Sorry, you are not allowed to access this router.")];
-   :local payLd ("chat_id=$chatId&reply_to_message_id=$msgId&text=$textMsg&parse_mode=markdown");
-   :local sendMsg [$tgFetch "sendMessage" $payLd];
-   :local sendRep [$jsonArr [$sendMsg $payLd]];
-   :if ($sendRep->"ok") do={
-    :set tgSuccess true;
-    :log warning "$logTopic Untrusted user @$fromUser, command ignored!";
-   }
+   :set textMsg [$urlEnc ("Sorry, you are not allowed to access this router.")];
+   :set payLd ("chat_id=$chatId&reply_to_message_id=$msgId&text=$textMsg");
+   :set sendMsg [$tgFetch "sendMessage" $payLd];
+   :set cmdLog "TGBot: Untrusted user @$fromUser, command ignored!";
   }
-  :if ($tgSuccess) do={
+  :local sendRep [$jsonArr [$sendMsg $payLd]];
+  :if ($sendRep->"ok") do={
    :set TGLastOffset ($updId + 1);
+   :log warning $cmdLog;
   } else={
    :set TGLastOffset $updId;
   }
