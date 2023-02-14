@@ -1,6 +1,6 @@
 #!rsc by RouterOS
 # RouterOS script: Telegram Bot
-# version: v0.2-2023-2-10-release
+# version: v0.3-2023-2-15-release
 # authors: zainarbani
 #
 
@@ -149,7 +149,7 @@
   :local rnduser [:pick ([/certificate/scep-server/otp generate minutes-valid=0 as-value]->"password") 0 5];
   /ip/hotspot/user add name=$rnduser password=$rnduser comment="user-$rnduser" server="all" limit-uptime=$1 limit-bytes-total=$2 profile=default;
   :local vcLogin "*VOUCHER*: ```$rnduser```\n\n*LOGIN*: http://$hsaddr\n\n*VALID*: $1\n*QUOTA*: $2";
-  :local qrLogin "https://api.qrserver.com/v1/create-qr-code\?data=http://$hsaddr/login\?username$rnduser%26password=$rnduser&bgcolor=CCD1D1";
+  :local qrLogin "https://api.qrserver.com/v1/create-qr-code\?data=http://$hsaddr/login\?username=$rnduser%26password=$rnduser&bgcolor=CCD1D1";
   :return {$vcLogin;$qrLogin};
  } else={
   :return "Usage: /vouchergen (duration) (quota)\nEx: /vouchergen 1d 2g";
